@@ -1,15 +1,12 @@
 # DataOnlyGadget
 DOG is a post-exploitation toolkit that uses your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
+Author: Juan Sacco - https://exploitpack.com
 
 It uses [`NTKernelWalkerLib`](https://github.com/jsacco/NTKernelWalkerLib) to recover the offsets and structures needed during discovery.
 
 ## Summary
 
 The tool is built around a pluggable kernel read/write backend and a runtime discovery pipeline. It resolves `ntoskrnl` symbols, walks kernel structures, generates offsets dynamically, enumerates kernel objects, collects gadget candidates, classify them, and organizes the discovered gadgets into chains.
-
-<p align="center" width="100%">
-<video src="https://github.com/jsacco/DataOnlyGadget/blob/main/dog.mp4" width="80%" controls></video>
-</p>
 
 <img src="https://exploitpack.eu/dog.png" alt="DOG">
 
@@ -44,6 +41,9 @@ The tool is built around a pluggable kernel read/write backend and a runtime dis
 - LSASS Minidump + PPL Zeroing
 - Suspend of target PID, works for Protected Processed
 
+## DOG in action
+
+https://github.com/user-attachments/assets/32097c0d-c6c5-4cea-afd0-936fb252f6f6
 
 ## Supported Exploit Classes
 

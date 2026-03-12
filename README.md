@@ -1,6 +1,8 @@
 # DataOnlyGadget
 DOG is a post-exploitation toolkit that uses your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
 
+A kernel gadget is a small piece of kernel code or a kernel data structure that can be repurposed as a building block in an exploit chain. Unlike traditional ROP gadgets (which are small sequences of instructions ending in a ret), DOG's kernel gadgets are data-oriented they're legitimate parts of the Windows kernel that can be abused to perform useful operations when combined.
+
 Works under VBS/HVCI/kCET enabled enviroments.
 
 Author: Juan Sacco - https://exploitpack.com

@@ -3,6 +3,8 @@ DOG is a post-exploitation toolkit that uses your existing kernel read/write pri
 
 A kernel gadget is a small piece of kernel code or a kernel data structure that can be repurposed as a building block in an exploit chain. Unlike traditional ROP gadgets (which are small sequences of instructions ending in a ret), DOG's kernel gadgets are data-oriented they're legitimate parts of the Windows kernel that can be abused to perform useful operations when combined.
 
+Author: Juan Sacco - https://exploitpack.com
+
 ## Why Kernel Gadgets? 
 
 Traditional kernel exploits rely on executing custom shellcode or ROP chains—techniques that modern mitigations like VBS, HVCI, and CET have rendered obsolete. DOG takes a different approach: **data-only gadget chaining**. Instead of injecting code, DOG discovers and repurposes existing kernel code and data structures.
@@ -15,9 +17,6 @@ Traditional kernel exploits rely on executing custom shellcode or ROP chains—t
 | **Kernel ASLR** | Predicting addresses | DOG resolves addresses at runtime |
 | **Patch Guard** | Modification of critical structures | Gadgets target non-protected data |
 
-
-
-Author: Juan Sacco - https://exploitpack.com
 
 It uses [`NTKernelWalkerLib`](https://github.com/jsacco/NTKernelWalkerLib) to recover the offsets and structures needed during discovery.
 

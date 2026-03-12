@@ -59,7 +59,7 @@ The tool is built around a pluggable kernel read/write backend and a runtime dis
 - LSASS Minidump + PPL Zeroing
 - Suspend of target PID, works for Protected Processed
 
-## DOG in action
+## DOG in action: Windows 11 25h2 with VBS/HVCI/kCET/CredentialGuard and AV active with tampering protection
 
 https://github.com/user-attachments/assets/32097c0d-c6c5-4cea-afd0-936fb252f6f6
 

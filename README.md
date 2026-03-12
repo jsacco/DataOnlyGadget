@@ -27,9 +27,6 @@ And it's based on my research on Arbitrary Code Execution via SSDT Hijack: [`SSD
 
 The tool is built around a pluggable kernel read/write backend and a runtime discovery pipeline. It resolves `ntoskrnl` symbols, walks kernel structures, generates offsets dynamically, enumerates kernel objects, collects gadget candidates, classify them, and organizes the discovered gadgets into chains.
 
-<img width="979" height="690" alt="f394f353-f9b4-4bbf-9807-82360d25b8dc" src="https://github.com/user-attachments/assets/e4467bbe-7eaa-4d6a-97fb-afa156303763" />
-
-
 ## Features
 
 - Pluggable `KernelReadWrite` backend interface

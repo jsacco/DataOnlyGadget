@@ -37,7 +37,6 @@ This tool is built around a pluggable kernel read/write backend and a runtime di
 - Multi-stage gadget discovery
 - Classification of discovered entries by type, structure, field, and ownership
 - Classification for discovered gadgets
-- Driver-backed physical memory backend through `PhysmemReadWrite`
 - Runtime Windows version and build detection
 - Deeper discovery stages:
   - pattern scan

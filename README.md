@@ -89,6 +89,43 @@ If you already have a working primitive, the expected workflow is to adapt it to
 
 The discovery and chaining logic are separated from the transport layer so other primitives can be plugged in through `KernelReadWrite` and `RwFactory`.
 
+## What DOG already provides
+
+- Abstract interface: implement KernelReadWrite (see KernelReadWrite.h).
+- A factory hook point: register your implementation in RwFactory.cpp.
+
+## How to plug in any primitive
+
+1. Implement KernelReadWrite:
+   Required: ReadMemory, WriteMemory, IsValidAddress, IsDriverAvailable.
+   Optional if supported: SupportsPhysical, ReadPhysical/WritePhysical, VirtToPhys.
+2. Drop your source into the project and add it to DataOnlyGadgetTool.vcxproj.
+3. Add a selector in RwFactory.cpp (e.g., flag/enum/env) that instantiates your class.
+4. Validate with a known kernel symbol (read) and a disposable writable slot (write), return false on failure.
+
+## Primitives depending on your Exploit Class
+
+- Arbitrary kernel VA R/W via driver IOCTL
+Implement ReadMemory/WriteMemory as IOCTL wrappers. Add strict IsValidAddress (kernel VA only).
+
+- Arbitrary kernel VA R/W via win32k/GDI pointer swap (bitmap/palette/session)
+Same ReadMemory/WriteMemory; allow session/kernel VA, block user VA.
+
+- Arbitrary write‑what‑where (UAF / pool overflow / NULL deref / logic bug)
+Expose it as WriteMemory; if you can also leak, expose that as ReadMemory. Guard addresses.
+
+- Handle table confusion leading to arbitrary kernel VA R/W
+Treat like generic VA R/W; same ReadMemory/WriteMemory hook.
+
+- Physical memory access (PCIe/DMA/Thunderbolt/FireWire/PCILeech, or map/unmap IOCTL)
+Set SupportsPhysical=true; implement ReadPhysical/WritePhysical and VirtToPhys. Mirror PhysmemReadWrite.cpp.
+
+Limited MSR/IO-port access
+Only support those ranges in ReadMemory/WriteMemory;
+
+Firmware/ACPI/SMBus giving system memory R/W
+Treat as physical backend (like DMA): SupportsPhysical, phys read/write, optional VA→PA.
+
 ## Example Workflows
 
 A few practical ways DOG fits into an existing exploit:

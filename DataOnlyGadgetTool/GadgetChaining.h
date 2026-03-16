@@ -66,9 +66,9 @@ public:
     GadgetChain FindPrivilegeEscalationChain(uint32_t targetPid = 0);
     GadgetChain FindPPLBypassChain(uint32_t targetPid = 0, uint8_t newProt = 0);
     GadgetChain FindDisableSecurityChain();
-    GadgetChain FindArbitraryReadChain();
-    GadgetChain FindArbitraryWriteChain();
-    GadgetChain FindCodeRedirectChain();
+    GadgetChain FindArbitraryReadChain(uint64_t targetAddr = 0, size_t size = 0);
+    GadgetChain FindArbitraryWriteChain(uint64_t targetAddr = 0, uint64_t value = 0);
+    GadgetChain FindCodeRedirectChain(uint64_t targetTarget = 0);
     GadgetChain FindTokenStealingChain(uint32_t targetPid = 0);
     GadgetChain FindCallbackDisableChain();
     GadgetChain FindArbitraryWriteFromHandleAccess();

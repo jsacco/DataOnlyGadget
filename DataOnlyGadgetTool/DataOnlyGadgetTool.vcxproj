@@ -85,6 +85,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="EtwDisable.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PhysmemReadWrite.cpp" />
     <ClCompile Include="SymbolResolver.cpp" />
@@ -100,6 +101,7 @@
     <ClCompile Include="RwFactory.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="EtwDisable.h" />
     <ClInclude Include="KernelReadWrite.h" />
     <ClInclude Include="PhysmemReadWrite.h" />
     <ClInclude Include="SymbolResolver.hpp" />

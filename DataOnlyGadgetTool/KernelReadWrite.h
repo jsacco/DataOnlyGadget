@@ -52,7 +52,7 @@ public:
 
     std::string ReadString(uint64_t address, size_t max_length = 256) {
         char buffer[256] = {0};
-        size_t read_size = std::min(max_length, sizeof(buffer) - 1);
+        size_t read_size = (std::min)(max_length, sizeof(buffer) - 1);
         if (ReadMemory(address, buffer, read_size)) {
             buffer[read_size] = '\0';
             return std::string(buffer);

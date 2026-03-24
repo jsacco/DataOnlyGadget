@@ -1,14 +1,17 @@
 # DOG: Data Only Gadgets
-DOG is a post-exploitation tool that uses your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
+DOG, short for Data Only Gadgets, is a post-exploitation tool that uses your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
 
 A kernel gadget is a small piece of kernel code or a kernel data structure that can be repurposed as a building block in an exploit chain. Unlike traditional ROP gadgets (which are small sequences of instructions ending in a ret), DOG's kernel gadgets are data-oriented and legitimate parts of the Windows kernel that can be used and abused to perform useful operations when combined.
 
 <img width="979" height="690" alt="f394f353-f9b4-4bbf-9807-82360d25b8dc" src="https://github.com/user-attachments/assets/22219664-28fb-4ad8-9f58-8fd4191b9e1a" />
 
+<img width="1330" height="1070" alt="Screenshot From 2026-03-24 14-44-07" src="https://github.com/user-attachments/assets/f1328daa-80bd-468b-8bdb-35d4bfe9f45f" />
 
 ## Why Kernel Gadgets? 
 
-Traditional kernel exploits rely on executing custom shellcode or ROP chains techniques that modern mitigations like VBS, HVCI, and CET have rendered obsolete. DOG takes a different approach: **data-only gadget chaining**. Instead of injecting code, DOG discovers and repurposes existing kernel code and data structures.
+Traditional kernel exploits rely on executing custom shellcode or ROP chains techniques that modern mitigations like VBS, HVCI, and CET have rendered obsolete.
+
+DOG takes a different approach, the usage of: data-only gadget chaining by discovering and repurposing existing kernel code and data structures into usable chains.
 
 | Mitigation | Protection aim | Gadgets |
 |------------|----------------|------------------------|
@@ -21,13 +24,26 @@ Traditional kernel exploits rely on executing custom shellcode or ROP chains tec
 
 DOG implements [`NTKernelWalkerLib`](https://github.com/jsacco/NTKernelWalkerLib) to recover the offsets and structures needed during discovery.
 
-And it's based on my research of Arbitrary Code Execution via SSDT Hijack: [`SSDTHijackWriteUp`](https://www.exploitpack.com/blogs/news/bypassing-kernel-code-execution-a-data-only-ssdt-hijack-under-hvci-but-how) 
+And it's based on my previous research of Arbitrary Code Execution via SSDT Hijack: [`SSDTHijackWriteUp`](https://www.exploitpack.com/blogs/news/bypassing-kernel-code-execution-a-data-only-ssdt-hijack-under-hvci-but-how) 
 
 ## Summary
 
 This tool is built around a pluggable kernel read/write backend and a runtime discovery pipeline. It resolves `ntoskrnl` symbols, walks kernel structures, generates offsets dynamically, enumerates kernel objects, collects gadget candidates, classify them, and organizes the discovered gadgets into chains.
 
-## Features
+## Main Features
+- Callback discovery zeroing/modification
+- Privilege escalation of target PID (token-swap)
+- Protected Process Light modification
+- Controlled VA/PA Arbitrary Read
+- Controlled VA/PA Aribitrary Write
+- Code Injection
+- Unlink (hiding) of target PID via Data
+- LSASS PatchWDigest
+- LSASS Dump Raw pages from memory
+- LSASS Minidump + PPL Zeroing
+- Suspend of target PID, works for Protected Processed
+
+Besides this actionable features, there are several more programmer-centric features available to incorporate your Kernel Exploit primitives into a fully functional DOG.
 
 - Pluggable `KernelReadWrite` backend interface
 - Runtime `ntoskrnl` symbol resolution using `dbghelp`
@@ -45,22 +61,12 @@ This tool is built around a pluggable kernel read/write backend and a runtime di
 - Gadget chain engine
 - Interactive mode and command-line mode
 - JSON export of discovered gadgets
-- Callback discovery zeroing/modification
-- Privilege escalation of target PID (token-swap)
-- Protected Process Light modification
-- Controlled VA/PA Arbitrary Read
-- Controlled VA/PA Aribitrary Write
-- Code Injection
-- Unlink (hiding) of target PID via Data
-- LSASS PatchWDigest
-- LSASS Dump Raw pages from memory
-- LSASS Minidump + PPL Zeroing
-- Suspend of target PID, works for Protected Processed
 
-## DOG unleashed
-Windows 11 25h2 (Latest build, fully patched) with VBS/HVCI/kCET/CredentialGuard and AV active with tampering protection
+## DOG in-action with Kernel Pack
+We integrated DOG into Kernel Pack with modifications to its base code, enabling Kernel Pack to deploy an agent that combines advanced user‑level bypass capabilities (inherited from Control Pack) with kernel‑level access, all while operating on a fully protected endpoint with VBS, HVCI, and kCET enabled.
 
-https://github.com/user-attachments/assets/32097c0d-c6c5-4cea-afd0-936fb252f6f6
+<img width="3024" height="1362" alt="Screenshot From 2026-03-17 20-26-05" src="https://github.com/user-attachments/assets/79807c6f-18a4-48a5-b16d-2963de4e2d3d" />
+
 
 ## Supported Exploit Classes
 
@@ -68,10 +74,9 @@ DOG is written to sit on top of an existing kernel read/write primitive and hand
 
 The project is built for exploit paths that depend on:
 
-- locating writable kernel data targets at runtime
-- resolving the structures and offsets those targets depend on
-- turning discovered entries into reusable chains
-
+locating writable kernel data targets at runtime
+resolving the structures and offsets those targets depend on
+turning discovered entries into reusable chains
 In practice, DOG is not tied to one specific primitive. The backend layer is abstracted behind `KernelReadWrite`, so different exploit classes can be adapted to the same discovery and chaining pipeline as long as they expose the memory operations DOG needs.
 
 The physical-memory backend included in this repository is just an example implementation, please plug-in your own.
@@ -94,9 +99,9 @@ The discovery and chaining logic are separated from the transport layer so other
 - Abstract interface: implement KernelReadWrite (see KernelReadWrite.h).
 - A factory hook point: register your implementation in RwFactory.cpp.
 
-## How to plug in any primitive
+## How to plug an exploit primitive
 
-1. Implement KernelReadWrite:
+1. Start by implementing KernelReadWrite:
    Required: ReadMemory, WriteMemory, IsValidAddress, IsDriverAvailable.
    Optional if supported: SupportsPhysical, ReadPhysical/WritePhysical, VirtToPhys.
 2. Drop your source into the project and add it to DataOnlyGadgetTool.vcxproj.

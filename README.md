@@ -43,6 +43,9 @@ This tool is built around a pluggable kernel read/write backend and a runtime di
 - LSASS Minidump + PPL Zeroing
 - Suspend of target PID, works for Protected Processed
 
+<img width="1330" height="1070" alt="Screenshot From 2026-03-24 15-02-06" src="https://github.com/user-attachments/assets/ef0dc365-0283-4683-848f-11a0b2ab716a" />
+
+
 Besides this actionable features, there are several more programmer-centric features available to incorporate your Kernel Exploit primitives into a fully functional DOG.
 
 - Pluggable `KernelReadWrite` backend interface
@@ -100,6 +103,9 @@ The discovery and chaining logic are separated from the transport layer so other
 - A factory hook point: register your implementation in RwFactory.cpp.
 
 ## How to plug an exploit primitive
+
+<img width="1163" height="759" alt="Screenshot From 2026-03-24 15-03-41" src="https://github.com/user-attachments/assets/3e24dbec-d6a7-4dd5-88d2-1719571aae4d" />
+
 
 1. Start by implementing KernelReadWrite:
    Required: ReadMemory, WriteMemory, IsValidAddress, IsDriverAvailable.

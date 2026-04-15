@@ -1,5 +1,5 @@
 # DOG: Data Only Gadgets
-DOG, short for Data Only Gadgets, is the technique of using kernel gadgets, comes pre-wrapped in a tool that let you use your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
+DOG, short for Data Only Gadgets, is the technique of using kernel gadgets, this has been bundle in a tool that let you use your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
 
 A kernel gadget is a small piece of kernel code or a kernel data structure that can be repurposed as a building block in an exploit chain. Unlike traditional ROP gadgets (which are small sequences of instructions ending in a ret), DOG's kernel gadgets are data-oriented and legitimate parts of the Windows kernel that can be used and abused to perform useful operations when combined.
 

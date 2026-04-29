@@ -1,3 +1,6 @@
+# THIS PROJECT IS NOT MAINTEINED HERE
+Please check https://exploitpack.com
+
 # DOG: Data Only Gadgets
 DOG, short for Data Only Gadgets, is the technique of using kernel gadgets, this has been bundle in a tool that let you use your existing kernel read/write primitives to locate, classify, and chain kernel gadgets, resolve the structures and offsets and build reusable chains at runtime to perform the attacks.
 

@@ -1,4 +1,4 @@
-# THIS PROJECT IS NOT MAINTEINED HERE
+# THIS PROJECT IS NOT MAINTAINED HERE
 Please check https://exploitpack.com
 
 # DOG: Data Only Gadgets
